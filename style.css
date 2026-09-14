@@ -50,29 +50,47 @@ body {
   max-width: 260px;
 }
 
+/* 多欄磚牆排版：欄寬與字級都跟著 --scale 等比縮放，
+   JS 會縮小 --scale 直到所有留言塞進畫面。欄寬變小時瀏覽器
+   會自動排出更多欄，所以容納量隨著縮放一起增加。 */
 .messages-panel {
+  --scale: 1;
   flex: 1;
-  padding: 32px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  padding: calc(28px * var(--scale));
+  overflow: hidden;
+  column-width: calc(300px * var(--scale));
+  column-gap: calc(14px * var(--scale));
+  column-fill: auto; /* 每欄填滿後才換下一欄，把垂直空間用滿 */
+  font-size: calc(22px * var(--scale));
 }
 
 .message-card {
   background: linear-gradient(135deg, #2a2e55, #1c1f3a);
   border: 1px solid #3a3f6b;
-  border-radius: 14px;
-  padding: 18px 22px;
-  font-size: 22px;
-  line-height: 1.5;
+  border-radius: calc(14px * var(--scale));
+  padding: calc(14px * var(--scale)) calc(18px * var(--scale));
+  margin-bottom: calc(14px * var(--scale));
+  font-size: 1em;
+  line-height: 1.45;
   word-break: break-word;
-  animation: pop-in 0.35s ease-out;
+  break-inside: avoid;
+}
+
+/* 只有新進的留言會有動畫，避免每次重新縮放時整面閃動 */
+.message-card.is-new {
+  animation: pop-in 0.45s ease-out;
 }
 
 @keyframes pop-in {
-  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  60%  { border-color: #7b86ff; }
   to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.msg-count {
+  color: #6a6f95;
+  font-size: 13px;
+  letter-spacing: 0.05em;
 }
 
 .empty-hint {

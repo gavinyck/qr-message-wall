@@ -11,6 +11,7 @@
     <div class="qr-panel">
       <div id="qrcode"></div>
       <p id="qr-url"></p>
+      <p class="msg-count"><span id="count">0</span> 則留言</p>
     </div>
     <div class="messages-panel" id="messages">
       <p class="empty-hint">掃描左邊 QR Code，你的話會出現在這裡</p>
@@ -42,16 +43,61 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-    const messagesRef = db.ref("messages/" + room).limitToLast(100);
+    const messagesRef = db.ref("messages/" + room).limitToLast(300);
 
     const container = document.getElementById("messages");
+    const countEl = document.getElementById("count");
     let hasMessages = false;
+    let total = 0;
 
-    function escapeHtml(str) {
-      const div = document.createElement("div");
-      div.textContent = str;
-      return div.innerHTML;
+    // 自動縮放：找出「所有留言剛好都塞得進畫面」的最大字級。
+    // 留言多就縮小，大螢幕上留言少則放大，盡量把空間用滿。
+    // 多欄排版在高度受限時會往右邊長出新欄位，所以這裡比對的是寬度。
+    const MIN_SCALE = 0.4;
+    const MAX_SCALE = 2.2;
+    const STEP = 0.05;
+
+    function setScale(s) {
+      container.style.setProperty("--scale", s.toFixed(2));
     }
+    function fits() {
+      return container.scrollWidth <= container.clientWidth + 1;
+    }
+
+    function fitToScreen() {
+      let scale = 1;
+      setScale(scale);
+
+      if (fits()) {
+        while (scale < MAX_SCALE) {
+          const next = scale + STEP;
+          setScale(next);
+          if (!fits()) {
+            setScale(scale); // 放大過頭，退回上一個可行的值
+            break;
+          }
+          scale = next;
+        }
+      } else {
+        while (scale > MIN_SCALE) {
+          scale -= STEP;
+          setScale(scale);
+          if (fits()) break;
+        }
+      }
+    }
+
+    let fitQueued = false;
+    function queueFit() {
+      if (fitQueued) return;
+      fitQueued = true;
+      requestAnimationFrame(() => {
+        fitQueued = false;
+        fitToScreen();
+      });
+    }
+
+    window.addEventListener("resize", queueFit);
 
     messagesRef.on("child_added", (snapshot) => {
       const data = snapshot.val();
@@ -63,9 +109,13 @@
       }
 
       const card = document.createElement("div");
-      card.className = "message-card";
-      card.innerHTML = escapeHtml(data.text);
-      container.prepend(card);
+      card.className = "message-card is-new";
+      card.textContent = data.text;
+      container.append(card);
+      card.addEventListener("animationend", () => card.classList.remove("is-new"));
+
+      countEl.textContent = ++total;
+      queueFit();
     });
   </script>
 </body>
