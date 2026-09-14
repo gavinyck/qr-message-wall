@@ -31,8 +31,15 @@ body {
 
 .qr-panel #qrcode {
   background: #fff;
-  padding: 24px;
   line-height: 0;
+  width: 272px;
+  max-width: 100%;
+}
+
+.qr-panel #qrcode svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .qr-panel p {

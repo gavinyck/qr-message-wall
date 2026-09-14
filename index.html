@@ -17,7 +17,7 @@
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
   <script src="firebase-config.js"></script>
@@ -25,14 +25,19 @@
     const params = new URLSearchParams(location.search);
     const room = params.get("room") || "main";
 
+    // 網址越短，QR Code 的格子越少、越好掃，所以預設房間就不帶參數
     const inputUrl = new URL("input.html", location.href);
-    inputUrl.searchParams.set("room", room);
+    if (room !== "main") {
+      inputUrl.searchParams.set("room", room);
+    }
 
-    new QRCode(document.getElementById("qrcode"), {
-      text: inputUrl.toString(),
-      width: 260,
-      height: 260
-    });
+    // margin 預設為 4 格，白色留白會直接畫進 SVG 裡，不依賴 CSS
+    const qr = qrcode(0, "M");
+    qr.addData(inputUrl.toString());
+    qr.make();
+    document.getElementById("qrcode").innerHTML =
+      qr.createSvgTag({ cellSize: 8, scalable: true });
+
     document.getElementById("qr-url").textContent = inputUrl.toString();
 
     firebase.initializeApp(firebaseConfig);
