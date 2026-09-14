@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>留言牆</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wall-layout">
+    <div class="qr-panel">
+      <canvas id="qrcode"></canvas>
+      <p id="qr-url"></p>
+    </div>
+    <div class="messages-panel" id="messages">
+      <p class="empty-hint">掃描左邊 QR Code，你的話會出現在這裡</p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const room = params.get("room") || "main";
+
+    const inputUrl = new URL("input.html", location.href);
+    inputUrl.searchParams.set("room", room);
+
+    QRCode.toCanvas(document.getElementById("qrcode"), inputUrl.toString(), { width: 260 });
+    document.getElementById("qr-url").textContent = inputUrl.toString();
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const messagesRef = db.ref("messages/" + room).limitToLast(100);
+
+    const container = document.getElementById("messages");
+    let hasMessages = false;
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    messagesRef.on("child_added", (snapshot) => {
+      const data = snapshot.val();
+      if (!data || !data.text) return;
+
+      if (!hasMessages) {
+        container.innerHTML = "";
+        hasMessages = true;
+      }
+
+      const card = document.createElement("div");
+      card.className = "message-card";
+      card.innerHTML = escapeHtml(data.text);
+      container.prepend(card);
+    });
+  </script>
+</body>
+</html>

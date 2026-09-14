@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>說一句話</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="input-layout">
+    <h1>留下你的一句話</h1>
+    <textarea id="text" maxlength="100" placeholder="輸入你想說的話..."></textarea>
+    <div class="char-count"><span id="count">0</span>/100</div>
+    <button id="submit">送出</button>
+    <div class="status-msg" id="status"></div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const room = params.get("room") || "main";
+    const COOLDOWN_MS = 5000;
+    const storageKey = "lastSubmit_" + room;
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const textEl = document.getElementById("text");
+    const countEl = document.getElementById("count");
+    const submitBtn = document.getElementById("submit");
+    const statusEl = document.getElementById("status");
+
+    textEl.addEventListener("input", () => {
+      countEl.textContent = textEl.value.length;
+    });
+
+    submitBtn.addEventListener("click", async () => {
+      const text = textEl.value.trim();
+      if (!text) {
+        statusEl.textContent = "請先輸入文字";
+        return;
+      }
+
+      const lastSubmit = Number(localStorage.getItem(storageKey) || 0);
+      const now = Date.now();
+      if (now - lastSubmit < COOLDOWN_MS) {
+        statusEl.textContent = "傳送太頻繁，請稍候再試";
+        return;
+      }
+
+      submitBtn.disabled = true;
+      statusEl.textContent = "傳送中...";
+
+      try {
+        await db.ref("messages/" + room).push({
+          text,
+          createdAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        localStorage.setItem(storageKey, String(now));
+        textEl.value = "";
+        countEl.textContent = "0";
+        statusEl.textContent = "已送出！";
+      } catch (err) {
+        statusEl.textContent = "傳送失敗，請再試一次";
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
