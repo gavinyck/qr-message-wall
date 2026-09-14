@@ -23,7 +23,7 @@
 4. 左側選單 **專案設定（齒輪圖示）-> 一般** -> 往下找「你的應用程式」-> 點網頁圖示 `</>` 新增一個 Web App
 5. 複製出現的 `firebaseConfig` 物件，貼進本專案的 `firebase-config.js` 取代裡面的內容
 
-> 注意：這組 config 裡的 apiKey 不是機密金鑰，可以放心公開在前端程式碼裡；真正的存取控制是靠 Realtime Database 規則。
+> 注意：這組 config 裡的 apiKey 不是機密金鑰，可以放心公開在前端程式碼裡；真正的存取控制是靠 Realtime Database 規則。詳見下方「關於 GitHub 的金鑰外洩警告」。
 
 ## 2. 放到 GitHub Pages
 
@@ -112,8 +112,42 @@ git push -u origin main
 
 ## 已內建的簡單防濫用機制
 
-- 單則訊息長度上限 100 字
+- 單則訊息長度上限 100 字（前端擋一次，資料庫規則再擋一次）
 - 每個裝置有 5 秒的送出冷卻時間（存在 localStorage）
-- 展示頁顯示時會做 HTML 跳脫，避免有人輸入程式碼造成 XSS
+- 留言一律以純文字輸出，避免有人輸入程式碼造成 XSS
 
 如果活動規模大、需要更嚴謹的防灌水或髒話過濾，可以再加強。
+
+## 關於 GitHub 的金鑰外洩警告
+
+GitHub 的 secret scanning 會對 `firebase-config.js` 裡的 `apiKey` 發出 **Google API Key** 警告。**這是誤判，不要輪替（rotate）這把金鑰**——換掉只會讓網站連不上 Firebase，擋不到任何人。
+
+原因：Firebase 網頁版的 `apiKey` 是**公開的專案識別碼，不是密碼**。瀏覽器必須帶著它才能連到你的專案，所以它一定會出現在前端程式碼裡；就算從 repo 移除，打開網頁按「檢視原始碼」照樣看得到。GitHub 只認得 `AIza...` 這個格式就報警，分不出是哪一種 Google 金鑰。
+
+真正保護資料的是 **Realtime Database 規則**（第 4 節）。Realtime Database 的存取完全不經過這把金鑰——帶不帶金鑰都一樣受規則管轄。就算有人拿這把金鑰註冊了帳號，規則比對的是 `auth.uid === 管理員UID`，所以他們只能跟一般訪客一樣送出留言，**不能刪除留言，也看不到房間清單**。
+
+### 該做的事
+
+1. **關閉公開註冊**（重要）：Firebase Console -> **Authentication -> 設定 -> 使用者動作**，取消勾選 **啟用建立（註冊）**。
+
+   只需要一個管理員帳號，建好之後就該關掉；否則任何人都能用這把公開金鑰在你的專案裡註冊帳號、灌爆使用者清單。
+
+2. **限制金鑰來源網域**（縱深防禦）：Google Cloud Console -> **API 和服務 -> 憑證** -> 點 `Browser key (auto created by Firebase)` -> **應用程式限制** 選 **HTTP 參照網址**，加入你的 GitHub Pages 網域，例如 `你的帳號.github.io/*`。
+
+   這保護的是 Authentication 等 Google API，對 Realtime Database 無效（它本來就不看這把金鑰）。
+
+3. **關閉 GitHub 警告**：repo 的 **Security -> Secret scanning**，把該警告關閉，原因選 **False positive**。
+
+### 怎麼自己驗證公開註冊是否已關閉
+
+```bash
+KEY="你的 apiKey"
+curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"probe@example.com","password":"1","returnSecureToken":true}'
+```
+
+密碼只有 1 個字元，必定失敗、不會真的建立帳號，只看回傳的錯誤類型：
+
+- `ADMIN_ONLY_OPERATION` -> 公開註冊已關閉（正確）
+- `WEAK_PASSWORD` -> 公開註冊還開著，請回到上面第 1 步
