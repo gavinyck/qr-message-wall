@@ -31,8 +31,7 @@ body {
 
 .qr-panel #qrcode {
   background: #fff;
-  padding: 12px;
-  border-radius: 12px;
+  padding: 24px;
   line-height: 0;
 }
 
