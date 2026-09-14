@@ -18,6 +18,22 @@
           }
         }
       }
+    },
+    "rooms": {
+      ".read": "auth != null && auth.uid === 'PASTE_ADMIN_UID_HERE'",
+      ".write": "auth != null && auth.uid === 'PASTE_ADMIN_UID_HERE'",
+      "$roomId": {
+        ".validate": "newData.hasChildren(['label','createdAt'])",
+        "label": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
     }
   }
 }

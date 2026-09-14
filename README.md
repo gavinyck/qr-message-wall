@@ -4,8 +4,9 @@
 
 - `index.html`：展示牆頁面（放大螢幕上），顯示 QR Code + 即時留言
 - `input.html`：手機掃碼後打開的輸入頁面
-- `admin.html`：管理頁面，可刪除個別留言或清空房間（需管理員登入）
+- `admin.html`：管理頁面，可建立房間、取得網址、刪除留言（需管理員登入）
 - `firebase-config.js`：Firebase 專案設定（需自行填入）
+- `database.rules.json`：資料庫安全規則，貼到 Firebase Console 用
 
 ## 1. 建立 Firebase 專案
 
@@ -58,27 +59,7 @@ git push -u origin main
 
 ### 4-2. 換上正式規則
 
-回到 **Realtime Database -> 規則**，把 `貼上你的管理員UID` 換成剛剛複製的 UID 後發布：
-
-```json
-{
-  "rules": {
-    "messages": {
-      "$room": {
-        ".read": true,
-        ".write": "auth != null && auth.uid === '貼上你的管理員UID'",
-        "$msgId": {
-          ".write": "!data.exists() || (auth != null && auth.uid === '貼上你的管理員UID')",
-          ".validate": "newData.hasChildren(['text','createdAt'])",
-          "text": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
-          "createdAt": { ".validate": "newData.isNumber()" },
-          "$other": { ".validate": false }
-        }
-      }
-    }
-  }
-}
-```
+回到 **Realtime Database -> 規則**，貼上 `database.rules.json` 的內容，把當中**三處** `PASTE_ADMIN_UID_HERE` 都換成剛剛複製的 UID，然後發布。
 
 這組規則的效果：
 
@@ -88,16 +69,26 @@ git push -u origin main
 | 新增一則留言 | 任何人（但內容必須是 1~100 字的文字） |
 | 修改或刪除留言 | 只有管理員 |
 | 清空整個房間 | 只有管理員 |
+| 讀取／建立／刪除房間 | 只有管理員 |
 
-比起原本的全開放規則，這同時擋掉了「陌生人把你的留言全部刪光」以及「灌入超長內容或奇怪欄位」。
+比起全開放規則，這同時擋掉了「陌生人把你的留言全部刪光」以及「灌入超長內容或奇怪欄位」。
 
 ### 4-3. 使用管理頁
 
 打開 `https://.../admin.html`，用管理員帳號登入後即可：
 
-- 切換「房間代號」查看不同場次
-- 逐則刪除不當留言
-- 「清空這個房間」需要按兩次才會執行，避免誤觸
+**建立房間**：輸入房間代號（英數字、`-`、`_`，最多 40 字）和活動名稱，按建立。每個房間的留言完全獨立，適合一場活動一個房間。
+
+**取得網址**：每個房間會列出兩個網址，各有複製按鈕——
+
+- **展示牆**：投影或大螢幕上要開的頁面，會自動顯示對應的 QR Code
+- **手機輸入**：QR Code 實際指向的頁面，通常不用手動分享
+
+**管理留言**：按「管理留言」載入該房間的留言，可逐則刪除，或用「清空這個房間」一次清掉。
+
+刪除房間和清空留言都需要**按兩次**才會執行，避免誤觸；5 秒內沒有再按就會自動取消。
+
+> 預設房間 `main` 不需要建立就能使用（展示牆網址不帶參數時就是它）。若要在管理頁操作沒有建立過的房間，用最下方「直接管理其他代號」輸入即可。
 
 ## 版面：所有留言都看得到
 

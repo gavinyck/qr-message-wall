@@ -25,17 +25,33 @@
         <button id="signout" class="btn-plain">登出</button>
       </div>
 
-      <div class="admin-bar">
-        <label>房間代號
-          <input id="room-input" value="main">
-        </label>
-        <span id="admin-count"></span>
-      </div>
+      <section>
+        <h2>建立房間</h2>
+        <div class="room-create">
+          <input id="new-room-code" placeholder="房間代號，例如 20260920">
+          <input id="new-room-label" placeholder="活動名稱（選填）">
+          <button id="create-room">建立</button>
+        </div>
+        <div class="status-msg" id="room-status"></div>
+      </section>
 
-      <div id="admin-list"></div>
+      <section>
+        <h2>房間列表</h2>
+        <div id="room-list"></div>
+        <div class="admin-bar manual-room">
+          <label>直接管理其他代號
+            <input id="room-input" placeholder="例如 main">
+          </label>
+          <button id="room-go" class="btn-plain">前往</button>
+        </div>
+      </section>
 
-      <button id="clear-all" class="btn-danger">清空這個房間</button>
-      <div class="status-msg" id="admin-status"></div>
+      <section id="messages-section" hidden>
+        <h2>「<span id="current-room"></span>」的留言 <span id="admin-count"></span></h2>
+        <div id="admin-list"></div>
+        <button id="clear-all" class="btn-danger">清空這個房間</button>
+        <div class="status-msg" id="admin-status"></div>
+      </section>
     </div>
   </div>
 
@@ -48,14 +64,62 @@
     const auth = firebase.auth();
     const db = firebase.database();
 
+    const ROOM_CODE_RE = /^[A-Za-z0-9_-]{1,40}$/;
+
     const signinView = document.getElementById("signin-view");
     const adminView = document.getElementById("admin-view");
     const signinStatus = document.getElementById("signin-status");
-    const adminStatus = document.getElementById("admin-status");
+    const roomStatus = document.getElementById("room-status");
+    const roomList = document.getElementById("room-list");
+    const roomInput = document.getElementById("room-input");
+    const msgSection = document.getElementById("messages-section");
+    const currentRoomEl = document.getElementById("current-room");
     const listEl = document.getElementById("admin-list");
     const countEl = document.getElementById("admin-count");
-    const roomInput = document.getElementById("room-input");
+    const adminStatus = document.getElementById("admin-status");
     const clearBtn = document.getElementById("clear-all");
+
+    // 展示牆在預設房間時不帶參數，網址才短、QR Code 才好掃，這裡要一致
+    function buildUrl(page, code) {
+      const url = new URL(page, location.href);
+      if (code !== "main") url.searchParams.set("room", code);
+      return url.toString();
+    }
+
+    // 兩段式確認：第一次按只是「上膛」，第二次才真的執行
+    function armable(btn, normalLabel, armedLabel, onConfirm) {
+      let armed = false;
+      let timer = null;
+      const reset = () => {
+        armed = false;
+        clearTimeout(timer);
+        btn.textContent = normalLabel;
+        btn.classList.remove("is-armed");
+      };
+      btn.textContent = normalLabel;
+      btn.addEventListener("click", async () => {
+        if (!armed) {
+          armed = true;
+          btn.textContent = armedLabel;
+          btn.classList.add("is-armed");
+          timer = setTimeout(reset, 5000);
+          return;
+        }
+        reset();
+        await onConfirm();
+      });
+    }
+
+    async function copyText(text, btn) {
+      const original = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = "已複製";
+      } catch (err) {
+        btn.textContent = "請手動複製";
+      }
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    }
 
     // ---------- 登入 ----------
 
@@ -83,35 +147,211 @@
       if (user) {
         document.getElementById("who").textContent = user.email;
         signinStatus.textContent = "";
-        subscribe();
+        subscribeRooms();
       } else {
-        unsubscribe();
+        unsubscribeRooms();
+        unsubscribeMessages();
+        msgSection.hidden = true;
       }
     });
 
-    // ---------- 留言列表 ----------
+    // ---------- 房間 ----------
 
-    let ref = null;
-    let handler = null;
+    const roomsRef = db.ref("rooms");
+    let roomsHandler = null;
 
-    function unsubscribe() {
-      if (ref && handler) ref.off("value", handler);
-      ref = null;
-      handler = null;
+    function subscribeRooms() {
+      unsubscribeRooms();
+      roomsHandler = roomsRef.on("value", renderRooms);
+    }
+
+    function unsubscribeRooms() {
+      if (roomsHandler) roomsRef.off("value", roomsHandler);
+      roomsHandler = null;
+      roomList.textContent = "";
+    }
+
+    document.getElementById("create-room").addEventListener("click", async () => {
+      const codeEl = document.getElementById("new-room-code");
+      const labelEl = document.getElementById("new-room-label");
+      const code = codeEl.value.trim();
+      const label = labelEl.value.trim() || code;
+
+      if (!ROOM_CODE_RE.test(code)) {
+        roomStatus.textContent = "房間代號只能用英文、數字、- 和 _，最多 40 字";
+        return;
+      }
+
+      roomStatus.textContent = "建立中...";
+      try {
+        const existing = await db.ref("rooms/" + code).once("value");
+        if (existing.exists()) {
+          roomStatus.textContent = "「" + code + "」已經存在了";
+          return;
+        }
+        await db.ref("rooms/" + code).set({
+          label,
+          createdAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        codeEl.value = "";
+        labelEl.value = "";
+        roomStatus.textContent = "已建立「" + label + "」";
+      } catch (err) {
+        roomStatus.textContent = "建立失敗：" + err.code;
+      }
+    });
+
+    async function renderRooms(snapshot) {
+      const rooms = [];
+      snapshot.forEach((child) => {
+        const val = child.val() || {};
+        rooms.push({ code: child.key, label: val.label || child.key, createdAt: val.createdAt || 0 });
+      });
+      rooms.sort((a, b) => b.createdAt - a.createdAt);
+
+      const counts = {};
+      await Promise.all(rooms.map(async (room) => {
+        try {
+          const snap = await db.ref("messages/" + room.code).once("value");
+          counts[room.code] = snap.numChildren();
+        } catch (err) {
+          counts[room.code] = null;
+        }
+      }));
+
+      roomList.textContent = "";
+
+      if (rooms.length === 0) {
+        const hint = document.createElement("p");
+        hint.className = "status-msg";
+        hint.textContent = "還沒有建立任何房間";
+        roomList.append(hint);
+        return;
+      }
+
+      for (const room of rooms) {
+        roomList.append(roomCard(room, counts[room.code]));
+      }
+    }
+
+    function roomCard(room, count) {
+      const card = document.createElement("div");
+      card.className = "room-card";
+
+      const head = document.createElement("div");
+      head.className = "room-head";
+
+      const label = document.createElement("strong");
+      label.textContent = room.label;
+
+      const code = document.createElement("span");
+      code.className = "room-code";
+      code.textContent = room.code;
+
+      const cnt = document.createElement("span");
+      cnt.className = "room-count";
+      cnt.textContent = count === null ? "—" : count + " 則";
+
+      head.append(label, code, cnt);
+      card.append(head);
+
+      card.append(urlRow("展示牆", buildUrl("index.html", room.code)));
+      card.append(urlRow("手機輸入", buildUrl("input.html", room.code)));
+
+      const actions = document.createElement("div");
+      actions.className = "room-actions";
+
+      const open = document.createElement("a");
+      open.className = "btn-plain";
+      open.textContent = "開啟展示牆";
+      open.href = buildUrl("index.html", room.code);
+      open.target = "_blank";
+      open.rel = "noopener";
+
+      const manage = document.createElement("button");
+      manage.className = "btn-plain";
+      manage.textContent = "管理留言";
+      manage.addEventListener("click", () => selectRoom(room.code));
+
+      const del = document.createElement("button");
+      del.className = "btn-plain btn-del";
+      armable(del, "刪除房間", "連同留言一起刪除？再按一次", async () => {
+        try {
+          await db.ref("messages/" + room.code).remove();
+          await db.ref("rooms/" + room.code).remove();
+          roomStatus.textContent = "已刪除「" + room.label + "」";
+          if (selectedRoom === room.code) {
+            unsubscribeMessages();
+            msgSection.hidden = true;
+          }
+        } catch (err) {
+          roomStatus.textContent = "刪除失敗：" + err.code;
+        }
+      });
+
+      actions.append(open, manage, del);
+      card.append(actions);
+      return card;
+    }
+
+    function urlRow(caption, url) {
+      const row = document.createElement("div");
+      row.className = "url-row";
+
+      const name = document.createElement("span");
+      name.className = "url-caption";
+      name.textContent = caption;
+
+      const field = document.createElement("input");
+      field.type = "text";
+      field.readOnly = true;
+      field.value = url;
+      field.addEventListener("focus", () => field.select());
+
+      const copy = document.createElement("button");
+      copy.className = "btn-plain";
+      copy.textContent = "複製";
+      copy.addEventListener("click", () => copyText(url, copy));
+
+      row.append(name, field, copy);
+      return row;
+    }
+
+    document.getElementById("room-go").addEventListener("click", () => {
+      const code = roomInput.value.trim();
+      if (!ROOM_CODE_RE.test(code)) {
+        adminStatus.textContent = "房間代號只能用英文、數字、- 和 _";
+        return;
+      }
+      selectRoom(code);
+    });
+
+    // ---------- 留言 ----------
+
+    let selectedRoom = null;
+    let msgRef = null;
+    let msgHandler = null;
+
+    function unsubscribeMessages() {
+      if (msgRef && msgHandler) msgRef.off("value", msgHandler);
+      msgRef = null;
+      msgHandler = null;
       listEl.textContent = "";
       countEl.textContent = "";
     }
 
-    function subscribe() {
-      unsubscribe();
-      const room = roomInput.value.trim() || "main";
-      ref = db.ref("messages/" + room);
-      handler = ref.on("value", (snapshot) => render(snapshot, room));
+    function selectRoom(code) {
+      unsubscribeMessages();
+      selectedRoom = code;
+      currentRoomEl.textContent = code;
+      msgSection.hidden = false;
+      adminStatus.textContent = "";
+      msgRef = db.ref("messages/" + code);
+      msgHandler = msgRef.on("value", (snapshot) => renderMessages(snapshot, code));
+      msgSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 
-    roomInput.addEventListener("change", subscribe);
-
-    function render(snapshot, room) {
+    function renderMessages(snapshot, room) {
       listEl.textContent = "";
       const entries = [];
       snapshot.forEach((child) => {
@@ -157,34 +397,13 @@
       }
     }
 
-    // ---------- 清空（兩段式確認，避免誤按） ----------
-
-    let armed = false;
-    let armedTimer = null;
-
-    function disarm() {
-      armed = false;
-      clearTimeout(armedTimer);
-      clearBtn.textContent = "清空這個房間";
-      clearBtn.classList.remove("is-armed");
-    }
-
-    clearBtn.addEventListener("click", async () => {
-      if (!armed) {
-        armed = true;
-        clearBtn.textContent = "確定要全部刪除？再按一次確認";
-        clearBtn.classList.add("is-armed");
-        armedTimer = setTimeout(disarm, 5000);
-        return;
-      }
-
-      disarm();
-      const room = roomInput.value.trim() || "main";
+    armable(clearBtn, "清空這個房間", "確定要全部刪除？再按一次確認", async () => {
+      if (!selectedRoom) return;
       clearBtn.disabled = true;
       adminStatus.textContent = "刪除中...";
       try {
-        await db.ref("messages/" + room).remove();
-        adminStatus.textContent = "已清空「" + room + "」的所有留言";
+        await db.ref("messages/" + selectedRoom).remove();
+        adminStatus.textContent = "已清空「" + selectedRoom + "」的所有留言";
       } catch (err) {
         adminStatus.textContent = "清空失敗：" + err.code;
       } finally {
