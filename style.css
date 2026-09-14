@@ -29,10 +29,11 @@ body {
   border-right: 1px solid #2a2e45;
 }
 
-.qr-panel canvas {
+.qr-panel #qrcode {
   background: #fff;
   padding: 12px;
   border-radius: 12px;
+  line-height: 0;
 }
 
 .qr-panel p {

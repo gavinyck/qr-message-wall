@@ -9,7 +9,7 @@
 <body>
   <div class="wall-layout">
     <div class="qr-panel">
-      <canvas id="qrcode"></canvas>
+      <div id="qrcode"></div>
       <p id="qr-url"></p>
     </div>
     <div class="messages-panel" id="messages">
@@ -17,7 +17,7 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/lib/browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
   <script src="firebase-config.js"></script>
@@ -28,7 +28,11 @@
     const inputUrl = new URL("input.html", location.href);
     inputUrl.searchParams.set("room", room);
 
-    QRCode.toCanvas(document.getElementById("qrcode"), inputUrl.toString(), { width: 260 });
+    new QRCode(document.getElementById("qrcode"), {
+      text: inputUrl.toString(),
+      width: 260,
+      height: 260
+    });
     document.getElementById("qr-url").textContent = inputUrl.toString();
 
     firebase.initializeApp(firebaseConfig);
