@@ -390,3 +390,40 @@ button:disabled {
 .manual-room {
   margin-top: 4px;
 }
+
+.debug-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 12px;
+  border: 1px dashed #3a3f6b;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #6a6f95;
+}
+
+.debug-label {
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.debug-tools label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.debug-tools input {
+  width: 80px;
+  font-size: 14px !important;
+  padding: 8px !important;
+}
+
+.debug-tools button {
+  margin-left: auto;
+  padding: 8px 14px;
+  font-size: 13px;
+}

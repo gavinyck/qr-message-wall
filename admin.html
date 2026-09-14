@@ -50,6 +50,15 @@
         <h2>「<span id="current-room"></span>」的留言 <span id="admin-count"></span></h2>
         <div id="admin-list"></div>
         <button id="clear-all" class="btn-danger">清空這個房間</button>
+
+        <div class="debug-tools">
+          <span class="debug-label">測試工具</span>
+          <label>筆數
+            <input id="seed-count" type="number" value="100" min="1" max="300">
+          </label>
+          <button id="seed" class="btn-plain">產生測試留言</button>
+        </div>
+
         <div class="status-msg" id="admin-status"></div>
       </section>
     </div>
@@ -396,6 +405,57 @@
         listEl.append(row);
       }
     }
+
+    // ---------- 測試工具：灌入假留言，用來確認展示牆版面 ----------
+
+    // 長短混合，才看得出磚牆排版與自動縮放的實際效果
+    const SAMPLE_TEXTS = [
+      "讚啦", "我來了", "晚安", "早安大家", "加油", "哈囉", "第一排",
+      "恭喜開幕！", "希望大家都順利", "好想吃宵夜", "終於等到這一天了",
+      "今天天氣真好", "一起努力吧", "我愛台灣", "希望世界和平", "期待下一場",
+      "第一次來，有點緊張", "祝福大家平安健康", "現場氣氛好棒",
+      "謝謝主辦單位的用心", "這個活動好有趣", "螢幕上看到自己的留言好興奮",
+      "從台中上來的，值得！", "剛剛那段演講真的很觸動我",
+      "今天學到很多東西，收穫滿滿，謝謝所有講者的分享",
+      "這個活動好有趣，希望明年還可以再參加一次",
+      "謝謝主辦單位的用心，每個細節都看得出來很花心思",
+      "很久沒有參加這種現場活動了，果然還是實體的感覺最好",
+      "希望大家在接下來的日子裡都能順順利利，事事如意",
+      "第一次用這種掃碼留言的方式，覺得很新鮮也很好玩",
+      "看到滿滿一牆的留言真的很感動，謝謝每一位到場的朋友",
+      "今天的內容超乎預期，回去要好好消化一下筆記",
+    ];
+
+    function randomText() {
+      return SAMPLE_TEXTS[Math.floor(Math.random() * SAMPLE_TEXTS.length)];
+    }
+
+    const seedBtn = document.getElementById("seed");
+
+    armable(seedBtn, "產生測試留言", "確定要灌入？再按一次確認", async () => {
+      if (!selectedRoom) return;
+      const n = Math.min(300, Math.max(1, Number(document.getElementById("seed-count").value) || 100));
+
+      seedBtn.disabled = true;
+      adminStatus.textContent = "產生中...";
+      try {
+        // 一次寫入，比呼叫 100 次 push() 快得多
+        const base = db.ref("messages/" + selectedRoom);
+        const updates = {};
+        for (let i = 0; i < n; i++) {
+          updates[base.push().key] = {
+            text: randomText(),
+            createdAt: firebase.database.ServerValue.TIMESTAMP
+          };
+        }
+        await base.update(updates);
+        adminStatus.textContent = "已在「" + selectedRoom + "」產生 " + n + " 筆測試留言";
+      } catch (err) {
+        adminStatus.textContent = "產生失敗：" + err.code;
+      } finally {
+        seedBtn.disabled = false;
+      }
+    });
 
     armable(clearBtn, "清空這個房間", "確定要全部刪除？再按一次確認", async () => {
       if (!selectedRoom) return;
