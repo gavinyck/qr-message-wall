@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>留言管理</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>💬</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="admin-layout">
+    <h1>留言管理</h1>
+
+    <div id="signin-view">
+      <p class="status-msg">請用 Firebase 建立的管理員帳號登入</p>
+      <input type="email" id="email" placeholder="管理員 Email" autocomplete="username">
+      <input type="password" id="password" placeholder="密碼" autocomplete="current-password">
+      <button id="signin">登入</button>
+      <div class="status-msg" id="signin-status"></div>
+    </div>
+
+    <div id="admin-view" hidden>
+      <div class="admin-bar">
+        <span id="who"></span>
+        <button id="signout" class="btn-plain">登出</button>
+      </div>
+
+      <div class="admin-bar">
+        <label>房間代號
+          <input id="room-input" value="main">
+        </label>
+        <span id="admin-count"></span>
+      </div>
+
+      <div id="admin-list"></div>
+
+      <button id="clear-all" class="btn-danger">清空這個房間</button>
+      <div class="status-msg" id="admin-status"></div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    const signinView = document.getElementById("signin-view");
+    const adminView = document.getElementById("admin-view");
+    const signinStatus = document.getElementById("signin-status");
+    const adminStatus = document.getElementById("admin-status");
+    const listEl = document.getElementById("admin-list");
+    const countEl = document.getElementById("admin-count");
+    const roomInput = document.getElementById("room-input");
+    const clearBtn = document.getElementById("clear-all");
+
+    // ---------- 登入 ----------
+
+    document.getElementById("signin").addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      if (!email || !password) {
+        signinStatus.textContent = "請輸入 Email 與密碼";
+        return;
+      }
+      signinStatus.textContent = "登入中...";
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+      } catch (err) {
+        signinStatus.textContent = "登入失敗：" + err.code;
+      }
+    });
+
+    document.getElementById("signout").addEventListener("click", () => auth.signOut());
+
+    auth.onAuthStateChanged((user) => {
+      signinView.hidden = !!user;
+      adminView.hidden = !user;
+      document.getElementById("password").value = "";
+      if (user) {
+        document.getElementById("who").textContent = user.email;
+        signinStatus.textContent = "";
+        subscribe();
+      } else {
+        unsubscribe();
+      }
+    });
+
+    // ---------- 留言列表 ----------
+
+    let ref = null;
+    let handler = null;
+
+    function unsubscribe() {
+      if (ref && handler) ref.off("value", handler);
+      ref = null;
+      handler = null;
+      listEl.textContent = "";
+      countEl.textContent = "";
+    }
+
+    function subscribe() {
+      unsubscribe();
+      const room = roomInput.value.trim() || "main";
+      ref = db.ref("messages/" + room);
+      handler = ref.on("value", (snapshot) => render(snapshot, room));
+    }
+
+    roomInput.addEventListener("change", subscribe);
+
+    function render(snapshot, room) {
+      listEl.textContent = "";
+      const entries = [];
+      snapshot.forEach((child) => {
+        entries.push({ key: child.key, text: (child.val() || {}).text || "" });
+      });
+
+      countEl.textContent = entries.length + " 則";
+      clearBtn.disabled = entries.length === 0;
+
+      if (entries.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "status-msg";
+        empty.textContent = "這個房間還沒有留言";
+        listEl.append(empty);
+        return;
+      }
+
+      // 最新的排在最上面，方便刪掉剛被亂灌的內容
+      for (const entry of entries.reverse()) {
+        const row = document.createElement("div");
+        row.className = "admin-row";
+
+        const text = document.createElement("span");
+        text.className = "admin-row-text";
+        text.textContent = entry.text;
+
+        const del = document.createElement("button");
+        del.className = "btn-plain btn-del";
+        del.textContent = "刪除";
+        del.addEventListener("click", async () => {
+          del.disabled = true;
+          try {
+            await db.ref("messages/" + room + "/" + entry.key).remove();
+            adminStatus.textContent = "已刪除一則留言";
+          } catch (err) {
+            adminStatus.textContent = "刪除失敗：" + err.code;
+            del.disabled = false;
+          }
+        });
+
+        row.append(text, del);
+        listEl.append(row);
+      }
+    }
+
+    // ---------- 清空（兩段式確認，避免誤按） ----------
+
+    let armed = false;
+    let armedTimer = null;
+
+    function disarm() {
+      armed = false;
+      clearTimeout(armedTimer);
+      clearBtn.textContent = "清空這個房間";
+      clearBtn.classList.remove("is-armed");
+    }
+
+    clearBtn.addEventListener("click", async () => {
+      if (!armed) {
+        armed = true;
+        clearBtn.textContent = "確定要全部刪除？再按一次確認";
+        clearBtn.classList.add("is-armed");
+        armedTimer = setTimeout(disarm, 5000);
+        return;
+      }
+
+      disarm();
+      const room = roomInput.value.trim() || "main";
+      clearBtn.disabled = true;
+      adminStatus.textContent = "刪除中...";
+      try {
+        await db.ref("messages/" + room).remove();
+        adminStatus.textContent = "已清空「" + room + "」的所有留言";
+      } catch (err) {
+        adminStatus.textContent = "清空失敗：" + err.code;
+      } finally {
+        clearBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

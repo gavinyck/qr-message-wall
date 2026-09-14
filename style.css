@@ -2,6 +2,12 @@
   box-sizing: border-box;
 }
 
+/* 作者樣式的 display 會蓋掉 hidden 屬性預設的 display:none，
+   所以這裡明確讓 hidden 優先 */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
@@ -173,4 +179,105 @@ button:disabled {
   min-height: 20px;
   font-size: 14px;
   color: #9aa0c3;
+}
+
+/* ---------- 管理頁 (admin.html) ---------- */
+
+.admin-layout {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-layout h1 {
+  font-size: 22px;
+  text-align: center;
+}
+
+.admin-layout input[type="email"],
+.admin-layout input[type="password"],
+.admin-layout input[type="text"],
+.admin-layout input:not([type]) {
+  border-radius: 10px;
+  border: 1px solid #3a3f6b;
+  background: #171a2b;
+  color: #f5f5f7;
+  font-size: 16px;
+  padding: 12px;
+  font-family: inherit;
+  width: 100%;
+}
+
+#signin-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #9aa0c3;
+  font-size: 14px;
+}
+
+.admin-bar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  white-space: nowrap;
+}
+
+#admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.admin-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #171a2b;
+  border: 1px solid #2a2e45;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.admin-row-text {
+  flex: 1;
+  word-break: break-word;
+  font-size: 15px;
+}
+
+.btn-plain {
+  background: none;
+  border: 1px solid #3a3f6b;
+  color: #9aa0c3;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.btn-del:hover {
+  border-color: #e25555;
+  color: #ff8080;
+}
+
+.btn-danger {
+  background: #7a2230;
+}
+
+.btn-danger.is-armed {
+  background: #e25555;
 }
