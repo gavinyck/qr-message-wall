@@ -66,6 +66,9 @@
     }
 
     function fitToScreen() {
+      // 一定要先還原成多欄狀態再量測，否則會一直沿用上一次的單欄結果
+      container.classList.remove("is-sparse");
+
       let scale = 1;
       setScale(scale);
 
@@ -86,6 +89,20 @@
           if (fits()) break;
         }
       }
+
+      // 留言還少、只排得出一欄時，多欄排版會讓卡片全擠在左邊、
+      // 右半邊空著。這種情況改成置中的單欄，畫面比較完整。
+      container.classList.toggle("is-sparse", usesSingleColumn());
+    }
+
+    function usesSingleColumn() {
+      const cards = container.children;
+      if (cards.length < 2) return true;
+      const left = cards[0].getBoundingClientRect().left;
+      for (const card of cards) {
+        if (Math.abs(card.getBoundingClientRect().left - left) > 1) return false;
+      }
+      return true;
     }
 
     let fitQueued = false;

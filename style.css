@@ -64,6 +64,20 @@ body {
   font-size: calc(22px * var(--scale));
 }
 
+/* 留言還少的時候：置中的單欄，不要讓卡片孤零零靠在左邊 */
+.messages-panel.is-sparse {
+  columns: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.messages-panel.is-sparse .message-card {
+  width: 100%;
+  max-width: calc(760px * var(--scale));
+}
+
 .message-card {
   background: linear-gradient(135deg, #2a2e55, #1c1f3a);
   border: 1px solid #3a3f6b;
