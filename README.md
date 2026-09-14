@@ -140,14 +140,24 @@ GitHub 的 secret scanning 會對 `firebase-config.js` 裡的 `apiKey` 發出 **
 
 ### 怎麼自己驗證公開註冊是否已關閉
 
+**最可靠也最安全的方法是直接看 Console**：Authentication -> 設定 -> 使用者動作，確認「啟用建立（註冊）」沒有被勾選。
+
+若要用指令再確認一次：
+
 ```bash
 KEY="你的 apiKey"
 curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"email":"probe@example.com","password":"1","returnSecureToken":true}'
+  -H 'Referer: https://你的帳號.github.io/' \
+  -d '{"email":"你已註冊的管理員Email","password":"aVeryLongPassword123!","returnSecureToken":true}'
 ```
 
-密碼只有 1 個字元，必定失敗、不會真的建立帳號，只看回傳的錯誤類型：
-
 - `ADMIN_ONLY_OPERATION` -> 公開註冊已關閉（正確）
-- `WEAK_PASSWORD` -> 公開註冊還開著，請回到上面第 1 步
+- `EMAIL_EXISTS` 或成功回傳 -> 公開註冊還開著，請回到上面第 1 步
+
+⚠️ **兩個容易踩到的坑**：
+
+1. **密碼一定要夠長（6 字以上）**。Firebase 會先檢查密碼格式、再檢查註冊是否開放，所以短密碼一律回 `WEAK_PASSWORD`，**不管註冊有沒有關閉**——拿它來判斷會得到錯誤結論。
+2. **Email 要填你已經註冊過的那個管理員帳號**。若填一個沒用過的 Email，而註冊其實還開著，這個請求就會**真的幫你建立一個帳號**。用已存在的 Email 就不會有這個副作用。
+
+如果金鑰已設定來源限制，記得像上面那樣帶 `Referer`，否則會先被來源限制擋掉而看不到真正的結果。
