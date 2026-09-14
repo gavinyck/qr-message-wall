@@ -1,0 +1,23 @@
+{
+  "rules": {
+    "messages": {
+      "$room": {
+        ".read": true,
+        ".write": "auth != null && auth.uid === 'PASTE_ADMIN_UID_HERE'",
+        "$msgId": {
+          ".write": "!data.exists() || (auth != null && auth.uid === 'PASTE_ADMIN_UID_HERE')",
+          ".validate": "newData.hasChildren(['text','createdAt'])",
+          "text": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    }
+  }
+}
