@@ -16,17 +16,20 @@
     <div class="status-msg" id="status"></div>
   </div>
 
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+  <!-- 這頁刻意不載入 Firebase SDK：SDK 會為了即時同步開一條 websocket
+       並持續佔用，而免費方案只有 100 個同時連線。活動現場七、八十支手機
+       就會逼近上限，後面的人會送不出留言。送出是一次性動作，改用 REST
+       就完全不佔連線，手機也少下載約 55 KB。 -->
   <script src="firebase-config.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const room = params.get("room") || "main";
     const COOLDOWN_MS = 5000;
+    const MAX_LENGTH = 100;
     const storageKey = "lastSubmit_" + room;
 
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    const endpoint = firebaseConfig.databaseURL.replace(/\/$/, "") +
+      "/messages/" + encodeURIComponent(room) + ".json";
 
     const textEl = document.getElementById("text");
     const countEl = document.getElementById("count");
@@ -51,14 +54,25 @@
         return;
       }
 
+      if (text.length > MAX_LENGTH) {
+        statusEl.textContent = "最多只能輸入 " + MAX_LENGTH + " 個字";
+        return;
+      }
+
       submitBtn.disabled = true;
       statusEl.textContent = "傳送中...";
 
       try {
-        await db.ref("messages/" + room).push({
-          text,
-          createdAt: firebase.database.ServerValue.TIMESTAMP
+        // POST 等同於 SDK 的 push()，會自動產生一個新的 key
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // .sv 讓伺服器自己填時間，手機時鐘不準也不影響排序
+          body: JSON.stringify({ text, createdAt: { ".sv": "timestamp" } })
         });
+
+        if (!res.ok) throw new Error("HTTP " + res.status);
+
         localStorage.setItem(storageKey, String(now));
         textEl.value = "";
         countEl.textContent = "0";

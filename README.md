@@ -118,6 +118,31 @@ git push -u origin main
 
 如果活動規模大、需要更嚴謹的防灌水或髒話過濾，可以再加強。
 
+## 使用量限制（Firebase 免費方案）
+
+| 項目 | 免費額度 | 對這個專案的影響 |
+| --- | --- | --- |
+| Realtime Database 同時連線 | 100 | **唯一要留意的一項**，見下方 |
+| Realtime Database 儲存空間 | 1 GB | 每則留言約 70 bytes，約可放 1,400 萬則，不會用到 |
+| Realtime Database 每月流量 | 10 GB | 同樣是數量級以上的餘裕 |
+| Authentication 月活躍使用者 | 50,000 | 只有一個管理員帳號 |
+
+### 為什麼輸入頁不用 Firebase SDK
+
+Firebase SDK 為了即時同步會開一條 websocket 並**持續佔用一個連線**。如果輸入頁用 SDK，每個送出過留言的人只要頁面還開著就佔一個連線——七、八十人的活動會直接逼近 100 的上限，之後的人就送不出留言了。
+
+所以 `input.html` 改用 **REST API**（單純一個 `fetch` POST）送出：
+
+| | 用 SDK | 用 REST |
+| --- | --- | --- |
+| 每支手機佔用連線 | 1（持續） | **0** |
+| 80 人時的總連線 | 約 81 | **1**（只有展示牆） |
+| 手機要下載的 JS | 約 55 KB | **0** |
+
+展示牆（`index.html`）仍然要用 SDK，因為它需要即時收到新留言——但一場活動通常只開一到兩面牆，連線數不是問題。
+
+> 換句話說，**同時開著的展示牆數量**才是消耗連線的主因，手機端幾乎不佔。
+
 ## 關於 GitHub 的金鑰外洩警告
 
 GitHub 的 secret scanning 會對 `firebase-config.js` 裡的 `apiKey` 發出 **Google API Key** 警告。**這是誤判，不要輪替（rotate）這把金鑰**——換掉只會讓網站連不上 Firebase，擋不到任何人。
